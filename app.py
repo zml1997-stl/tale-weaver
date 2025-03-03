@@ -38,49 +38,55 @@ if "story_state" not in st.session_state:
         "stage": "welcome"  # welcome, setup, story, ending
     }
 
-# Custom styling
+# Custom styling with improved contrast and button overrides
 def load_css():
     st.markdown("""
     <style>
+        /* Background and overall text color */
         .stApp {
             background-image: linear-gradient(to bottom, #1e3c72, #2a5298);
-            color: white;
+            color: #ffffff;
         }
+        /* Story text container with a darker transparent background */
         .story-text {
-            background-color: rgba(255, 255, 255, 0.1);
+            background-color: rgba(0, 0, 0, 0.5);
             border-radius: 10px;
             padding: 20px;
             margin: 10px 0;
             line-height: 1.6;
+            color: #ffffff;
         }
-        .choice-button {
+        /* Override default Streamlit button styling for better contrast */
+        .stButton button {
             background-color: #4CAF50;
-            border: none;
-            color: white;
-            padding: 15px 32px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
+            color: #ffffff;
+            padding: 10px 24px;
             font-size: 16px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 12px;
-            transition: 0.3s;
+            border: none;
+            border-radius: 8px;
+            transition: background-color 0.3s ease;
         }
-        .choice-button:hover {
+        .stButton button:hover {
             background-color: #3e8e41;
         }
+        /* Sidebar button styling (optional customization) */
+        .sidebar .stButton button {
+            background-color: #6a1b9a;
+        }
+        /* Headers with text shadow for clarity */
         .welcome-header {
             font-size: 4rem;
             text-align: center;
             margin-bottom: 30px;
             text-shadow: 2px 2px 4px #000000;
+            color: #ffffff;
         }
         .section-header {
             font-size: 2rem;
             margin-top: 20px;
             margin-bottom: 10px;
             text-shadow: 1px 1px 2px #000000;
+            color: #ffffff;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -225,8 +231,7 @@ def show_welcome():
         1. Select a genre and customize your character
         2. Choose your starting scenario
         3. Make decisions at key points to guide the narrative
-        4. Enjoy a unique story that unfolds based on your choices
-        5. Save your favorite stories to revisit later
+        4. Save your favorite stories to revisit later
         
         Every journey is different, and the possibilities are endless!
     </div>
@@ -325,7 +330,7 @@ def show_story():
     with col1:
         if st.button("Save Story"):
             filename = save_story(st.session_state.story_state)
-            st.success(f"Story saved successfully!")
+            st.success("Story saved successfully!")
     
     with col2:
         if st.button("End Story & Start New"):
