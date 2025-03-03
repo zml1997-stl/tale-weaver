@@ -729,6 +729,10 @@ def show_setup():
                     st.session_state.story_state["character_trait"] = st.session_state.character_trait
                     st.session_state.story_state["current_text"] = starter
                     st.session_state.story_state["stage"] = "story"
+                    if "selected_genre" in st.session_state:
+        del st.session_state.selected_genre
+    if "story_starters" in st.session_state:
+        del st.session_state.story_starters
                     st.session_state.story_state["path_taken"].append({"type": "beginning", "text": starter})
                     st.session_state.story_state["word_count"] = len(starter.split())
                     st.session_state.story_state["story_turns"] = 0
@@ -834,7 +838,11 @@ def show_story():
                 if "current_choices" in st.session_state:
                     del st.session_state.current_choices
                     
-                st.experimental_rerun()
+                # Add this before rerunning:
+                if "current_choices" in st.session_state:
+                    del st.session_state.current_choices   
+                    
+                st.rerun()
     
     # Navigation options
     col1, col2, col3 = st.columns(3)
