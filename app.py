@@ -739,16 +739,16 @@ if st.button(f"Begin This Story", key=f"starter_{i}"):
     st.session_state.story_state["word_count"] = len(starter.split())
     st.session_state.story_state["story_turns"] = 0
                     
-                    # Generate audio for the starter
-                    audio_path = text_to_speech(starter)
-                    if audio_path:
-                        st.session_state.current_audio = audio_path
+    # Generate audio for the starter
+        audio_path = text_to_speech(starter)
+        if audio_path:
+        st.session_state.current_audio = audio_path
                     
-                    # Clear temporary states
-                    if "current_choices" in st.session_state:
-                        del st.session_state.current_choices
+    # Clear temporary states
+        if "current_choices" in st.session_state:
+        del st.session_state.current_choices
                         
-                    st.experimental_rerun()
+    st.experimental_rerun()
 
 # Story screen
 def show_story():
