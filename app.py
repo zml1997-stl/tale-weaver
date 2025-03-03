@@ -742,11 +742,11 @@ if st.button(f"Begin This Story", key=f"starter_{i}"):
     # Generate audio for the starter
     audio_path = text_to_speech(starter)
     if audio_path:
-    st.session_state.current_audio = audio_path
+       st.session_state.current_audio = audio_path
                     
     # Clear temporary states
     if "current_choices" in st.session_state:
-    del st.session_state.current_choices
+       del st.session_state.current_choices
                         
     st.experimental_rerun()
 
