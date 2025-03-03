@@ -65,7 +65,7 @@ def load_css():
         
         /* Dialog text styling */
         .dialog {
-            color: #141414;
+            color: #e0e0e0;
             font-style: italic;
         }
         
@@ -74,11 +74,10 @@ def load_css():
             color: #ffffff;
         }
         
-        /* Choice styling */
-      /* Replace existing .choice-button styles with this */
+    /* Update button styling in the CSS section */
 .stButton > button {
-    background-color: rgba(25, 50, 75, 0.8) !important;
-    color: #ffffff !important;
+    background-color: #19324B !important; /* Solid dark blue */
+    color: #FFFFFF !important;
     padding: 12px 24px !important;
     font-size: 1.05rem !important;
     border: 2px solid #4CAF50 !important;
@@ -89,7 +88,6 @@ def load_css():
     white-space: normal !important;
     height: auto !important;
     line-height: 1.5 !important;
-    /* Remove transition and hover effects */
     transition: none !important;
 }
 
