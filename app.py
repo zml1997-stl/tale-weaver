@@ -700,6 +700,7 @@ def show_setup():
                 st.experimental_rerun()
 
 # Story screen
+# Story screen
 def show_story():
     # Story header with genre badge
     st.markdown(f"""
@@ -739,10 +740,11 @@ def show_story():
             st.session_state.current_choices = choices
     
     # Display choices
-st.markdown("<h3>What will you do next?</h3>", unsafe_allow_html=True)
+    st.markdown("<h3>What will you do next?</h3>", unsafe_allow_html=True)
 
-for i, choice in enumerate(st.session_state.current_choices):
-    if st.button(choice, key=f"choice_{i}", help="Choose this action"):
+    for i, choice in enumerate(st.session_state.current_choices):
+        if st.button(choice, key=f"choice_{i}", help="Choose this action"):
+            chosen_action = choice  # Added missing variable declaration
             
             # Record choice
             st.session_state.story_state["choices_made"].append(chosen_action)
