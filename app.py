@@ -722,20 +722,22 @@ def show_setup():
                 </div>
                 """, unsafe_allow_html=True)
                 
-                if st.button(f"Begin This Story", key=f"starter_{i}"):
-                    # Save selections and move to story stage
-                    st.session_state.story_state["genre"] = st.session_state.selected_genre
-                    st.session_state.story_state["character_name"] = character_name if 'character_name' in locals() else ""
-                    st.session_state.story_state["character_trait"] = st.session_state.character_trait
-                    st.session_state.story_state["current_text"] = starter
-                    st.session_state.story_state["stage"] = "story"
-                    if "selected_genre" in st.session_state:
+if st.button(f"Begin This Story", key=f"starter_{i}"):
+    # Save selections and move to story stage
+    st.session_state.story_state["genre"] = st.session_state.selected_genre
+    st.session_state.story_state["character_name"] = character_name if 'character_name' in locals() else ""
+    st.session_state.story_state["character_trait"] = st.session_state.character_trait
+    st.session_state.story_state["current_text"] = starter
+    st.session_state.story_state["stage"] = "story"
+
+    if "selected_genre" in st.session_state:
         del st.session_state.selected_genre
     if "story_starters" in st.session_state:
         del st.session_state.story_starters
-                    st.session_state.story_state["path_taken"].append({"type": "beginning", "text": starter})
-                    st.session_state.story_state["word_count"] = len(starter.split())
-                    st.session_state.story_state["story_turns"] = 0
+
+    st.session_state.story_state["path_taken"].append({"type": "beginning", "text": starter})
+    st.session_state.story_state["word_count"] = len(starter.split())
+    st.session_state.story_state["story_turns"] = 0
                     
                     # Generate audio for the starter
                     audio_path = text_to_speech(starter)
