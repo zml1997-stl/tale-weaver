@@ -704,17 +704,27 @@ def show_setup():
                 st.session_state.character_trait = character_trait
                 
         # Show starters if available
-        if "story_starters" in st.session_state and "selected_genre" in st.session_state:
-            st.markdown("<h3 class='section-header'>Choose your starting point:</h3>", unsafe_allow_html=True)
-            
+if "story_starters" in st.session_state and "selected_genre" in st.session_state:
+    st.markdown("<h3 class='section-header'>Choose your starting point:</h3>", unsafe_allow_html=True)
+   
+    # Create a container for the story starter selection
+    starter_container = st.container()
+   
+    # Check if a starter has been selected
+    if "selected_starter" not in st.session_state:
+        # If no starter selected yet, show all options
+        with starter_container:
             for i, starter in enumerate(st.session_state.story_starters):
                 st.markdown(f"""
                 <div class="story-option">
                     {starter}
                 </div>
                 """, unsafe_allow_html=True)
-                
+               
                 if st.button(f"Begin This Story", key=f"starter_{i}"):
+                    # Save the selected starter
+                    st.session_state.selected_starter = i
+                   
                     # Save selections and move to story stage
                     st.session_state.story_state["genre"] = st.session_state.selected_genre
                     st.session_state.story_state["character_name"] = character_name if 'character_name' in locals() else ""
@@ -724,17 +734,35 @@ def show_setup():
                     st.session_state.story_state["path_taken"].append({"type": "beginning", "text": starter})
                     st.session_state.story_state["word_count"] = len(starter.split())
                     st.session_state.story_state["story_turns"] = 0
-                    
+                   
                     # Generate audio for the starter
                     audio_path = text_to_speech(starter)
                     if audio_path:
                         st.session_state.current_audio = audio_path
-                    
+                   
                     # Clear temporary states
                     if "current_choices" in st.session_state:
                         del st.session_state.current_choices
-                        
+                       
                     st.experimental_rerun()
+    else:
+        # If a starter has been selected, only show that one with a message
+        with starter_container:
+            selected_idx = st.session_state.selected_starter
+            st.markdown(f"""
+            <div class="story-option">
+                {st.session_state.story_starters[selected_idx]}
+            </div>
+            """, unsafe_allow_html=True)
+            st.info("Story beginning selected! Your adventure is starting...")
+           
+            # Add a small delay before transitioning to story mode
+            import time
+            time.sleep(0.5)
+           
+            # Move to story stage
+            st.session_state.story_state["stage"] = "story"
+            st.experimental_rerun()
 
 # Story screen
 def show_story():
