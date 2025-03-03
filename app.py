@@ -711,44 +711,45 @@ def show_setup():
                 st.session_state.story_starters = starters
                 st.session_state.character_trait = character_trait
                 
-        # Show starters if available
-        if "story_starters" in st.session_state and "selected_genre" in st.session_state:
-            st.markdown("<h3 class='section-header'>Choose your starting point:</h3>", unsafe_allow_html=True)
+        # In the show_setup() function, after generating story starters:
+if "story_starters" in st.session_state and "selected_genre" in st.session_state:
+    st.markdown("<h3 class='section-header'>Choose your starting point:</h3>", unsafe_allow_html=True)
+    
+    # Add a loop to iterate over the story starters
+    for i, starter in enumerate(st.session_state.story_starters):  # <--- THIS IS WHERE 'i' IS DEFINED
+        st.markdown(f"""
+        <div class="story-option">
+            {starter}
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Now 'i' is defined and can be used in the button key
+        if st.button(f"Begin This Story", key=f"starter_{i}"):
+            # Save selections and move to story stage
+            st.session_state.story_state["genre"] = st.session_state.selected_genre
+            st.session_state.story_state["character_name"] = character_name if 'character_name' in locals() else ""
+            st.session_state.story_state["character_trait"] = st.session_state.character_trait
+            st.session_state.story_state["current_text"] = starter
+            st.session_state.story_state["stage"] = "story"
             
-            for i, starter in enumerate(st.session_state.story_starters):
-                st.markdown(f"""
-                <div class="story-option">
-                    {starter}
-                </div>
-                """, unsafe_allow_html=True)
+            # Clear temporary states
+            if "selected_genre" in st.session_state:
+                del st.session_state.selected_genre
+            if "story_starters" in st.session_state:
+                del st.session_state.story_starters
+            
+            st.session_state.story_state["path_taken"].append({"type": "beginning", "text": starter})
+            
+            # Generate audio for the starter
+            audio_path = text_to_speech(starter)
+            if audio_path:
+                st.session_state.current_audio = audio_path
+            
+            # Clear any temporary states
+            if "current_choices" in st.session_state:
+                del st.session_state.current_choices
                 
-if st.button(f"Begin This Story", key=f"starter_{i}"):
-    # Save selections and move to story stage
-    st.session_state.story_state["genre"] = st.session_state.selected_genre
-    st.session_state.story_state["character_name"] = character_name if 'character_name' in locals() else ""
-    st.session_state.story_state["character_trait"] = st.session_state.character_trait
-    st.session_state.story_state["current_text"] = starter
-    st.session_state.story_state["stage"] = "story"
-
-    if "selected_genre" in st.session_state:
-        del st.session_state.selected_genre
-    if "story_starters" in st.session_state:
-        del st.session_state.story_starters
-
-    st.session_state.story_state["path_taken"].append({"type": "beginning", "text": starter})
-    st.session_state.story_state["word_count"] = len(starter.split())
-    st.session_state.story_state["story_turns"] = 0
-                    
-    # Generate audio for the starter
-    audio_path = text_to_speech(starter)
-    if audio_path:
-       st.session_state.current_audio = audio_path
-                    
-    # Clear temporary states
-    if "current_choices" in st.session_state:
-       del st.session_state.current_choices
-                        
-    st.experimental_rerun()
+            st.experimental_rerun()
 
 # Story screen
 def show_story():
