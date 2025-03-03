@@ -138,6 +138,14 @@ def load_css():
         box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
     }
 
+    /* Add disabled state styling */
+.stButton > button:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
+}
+
     /* Button hover effect */
     .stButton > button:hover {
         background-color: #388E3C !important;
