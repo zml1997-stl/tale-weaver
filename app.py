@@ -65,7 +65,7 @@ def load_css():
         
         /* Dialog text styling */
         .dialog {
-            color: #e0e0e0;
+            color: #141414;
             font-style: italic;
         }
         
