@@ -75,45 +75,32 @@ def load_css():
         }
         
         /* Choice styling */
-        .choice-button {
-            background-color: rgba(25, 50, 75, 0.8) !important;
-            color: #ffffff !important;
-            padding: 12px 24px !important;
-            font-size: 1.05rem !important;
-            border: 2px solid #4CAF50 !important;
-            border-radius: 8px !important;
-            margin: 5px 0 !important;
-            transition: all 0.3s ease !important;
-            text-align: left !important;
-            width: 100% !important;
-            white-space: normal !important;
-            height: auto !important;
-            line-height: 1.5 !important;
-        }
-        
-        .choice-button:hover {
-            background-color: rgba(35, 70, 95, 0.9) !important;
-            border-color: #66bb6a !important;
-            transform: translateY(-2px) !important;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
-        }
-        
-        /* Primary button styling */
-        .primary-button {
-            background-color: #4CAF50 !important;
-            color: #ffffff !important;
-            padding: 10px 24px !important;
-            font-size: 16px !important;
-            border: none !important;
-            border-radius: 8px !important;
-            transition: all 0.3s ease !important;
-        }
-        
-        .primary-button:hover {
-            background-color: #3e8e41 !important;
-            transform: translateY(-2px) !important;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
-        }
+      /* Replace existing .choice-button styles with this */
+.stButton > button {
+    background-color: rgba(25, 50, 75, 0.8) !important;
+    color: #ffffff !important;
+    padding: 12px 24px !important;
+    font-size: 1.05rem !important;
+    border: 2px solid #4CAF50 !important;
+    border-radius: 8px !important;
+    margin: 5px 0 !important;
+    text-align: left !important;
+    width: 100% !important;
+    white-space: normal !important;
+    height: auto !important;
+    line-height: 1.5 !important;
+    /* Remove transition and hover effects */
+    transition: none !important;
+}
+
+/* Remove hover effects by making it match normal state */
+.stButton > button:hover {
+    background-color: rgba(25, 50, 75, 0.8) !important;
+    color: #ffffff !important;
+    border-color: #4CAF50 !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
         
         /* Secondary button styling */
         .secondary-button {
@@ -752,22 +739,10 @@ def show_story():
             st.session_state.current_choices = choices
     
     # Display choices
-    st.markdown("<h3>What will you do next?</h3>", unsafe_allow_html=True)
-    
-    for i, choice in enumerate(st.session_state.current_choices):
-        # Add unique styling to each choice button
-        button_html = f"""
-        <div class="stButton">
-            <button class="choice-button">
-                {choice}
-            </button>
-        </div>
-        """
-        st.markdown(button_html, unsafe_allow_html=True)
-        
-        # Actual button for functionality
-        if st.button(choice, key=f"choice_{i}", help="Choose this action"):
-            chosen_action = choice
+st.markdown("<h3>What will you do next?</h3>", unsafe_allow_html=True)
+
+for i, choice in enumerate(st.session_state.current_choices):
+    if st.button(choice, key=f"choice_{i}", help="Choose this action"):
             
             # Record choice
             st.session_state.story_state["choices_made"].append(chosen_action)
