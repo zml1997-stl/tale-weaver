@@ -409,7 +409,7 @@ def generate_story_starters(genre=None, character_name=None, character_trait=Non
     """Generate story starters based on genre and character information"""
     prompt = """
     Generate 3 unique and engaging story starters for an interactive fiction game. 
-    Each starter should be 2-3 sentences long and end with an intriguing situation 
+    Each starter should be 6-8 sentences long and end with an intriguing situation 
     that sets up a choice, but DO NOT include the choices in the starter.
     """
     
@@ -460,7 +460,7 @@ def generate_choices(story_so_far, genre, character_name, character_trait=None, 
     
     prompt += """
     Each choice should:
-    1. Be 1-2 sentences long
+    1. Be 4-6 sentences long
     2. Offer a clear and specific action
     3. Lead to different possible story directions
     4. Make sense given the current story situation
@@ -506,7 +506,7 @@ def continue_story(story_so_far, chosen_action, genre, character_name, character
         prompt += f"\nRemember that the character is {character_trait}, which influences their approach and reactions."
     
     prompt += """
-    Write the next part of the story (about 150-200 words) that follows from this choice. 
+    Write the next part of the story (about 400-600 words) that follows from this choice. 
     End at a natural stopping point that creates anticipation for what might happen next.
     
     IMPORTANT:
@@ -535,7 +535,7 @@ def generate_story_ending(story_so_far, genre, character_name, character_trait=N
         prompt += f"\nRemember that the character is {character_trait}, which should be reflected in how they resolve the situation."
     
     prompt += """
-    Create a meaningful and emotionally resonant ending (about 200-300 words) that:
+    Create a meaningful and emotionally resonant ending (about 400-600 words) that:
     1. Resolves the main tension or conflict
     2. Provides closure for the character
     3. Reflects the tone and themes of the genre
