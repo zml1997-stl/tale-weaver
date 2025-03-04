@@ -937,7 +937,8 @@ def show_story():
                     
                     # Update story text with user's choice and next part
                     st.session_state.story_state["current_text"] += f"\n\n<div class='choice-marker'>You chose: {chosen_action}</div>\n\n{next_part}"
-
+                    
+                    # Generate audio for the next part
 try:
     audio_path = text_to_speech(next_part)
     if audio_path:
