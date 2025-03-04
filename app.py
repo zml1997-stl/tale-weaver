@@ -914,95 +914,85 @@ def show_story():
                 ]
     
     # Display choices
-st.markdown("<h3>What will you do next?</h3>", unsafe_allow_html=True)
+    st.markdown("<h3>What will you do next?</h3>", unsafe_allow_html=True)
+    
+    for i, choice in enumerate(st.session_state.current_choices):
+        if st.button(choice, key=f"choice_{i}", help="Choose this action"):
+            chosen_action = choice
+            
+            # Record choice
+            st.session_state.story_state["choices_made"].append(chosen_action)
+            st.session_state.story_state["path_taken"].append({"type": "choice", "text": chosen_action})
+            
+            # Continue story based on choice
+            with st.spinner("The story unfolds..."):
+                try:
+                    next_part = continue_story(
+                        st.session_state.story_state["current_text"],
+                        chosen_action,
+                        st.session_state.story_state["genre"],
+                        st.session_state.story_state["character_name"],
+                        st.session_state.story_state.get("character_trait", "")
+                    )
+                    
+                    # Update story text with user's choice and next part
+                    st.session_state.story_state["current_text"] += f"\n\n<div class='choice-marker'>You chose: {chosen_action}</div>\n\n{next_part}"
 
-for i, choice in enumerate(st.session_state.current_choices):
-    if st.button(choice, key=f"choice_{i}", help="Choose this action"):
-        chosen_action = choice
+try:
+    audio_path = text_to_speech(next_part)
+    if audio_path:
+        st.session_state.current_audio = audio_path
 
-        # Record choice
-        st.session_state.story_state["choices_made"].append(chosen_action)
-        st.session_state.story_state["path_taken"].append({"type": "choice", "text": chosen_action})
-
-        # Continue story based on choice
-        with st.spinner("The story unfolds..."):
-            try:
-                next_part = continue_story(
-                    st.session_state.story_state["current_text"],
-                    chosen_action,
-                    st.session_state.story_state["genre"],
-                    st.session_state.story_state["character_name"],
-                    st.session_state.story_state.get("character_trait", "")
-                )
-
-                # Update story text with user's choice and next part
-                st.session_state.story_state["current_text"] += f"\n\n<div class='choice-marker'>You chose: {chosen_action}</div>\n\n{next_part}"
-
-            except Exception as e:
-                logger.error(f"Error continuing story: {str(e)}")
-
-        # Generate audio for the next part
-        try:
-            audio_path = text_to_speech(next_part)
-            if audio_path:
-                st.session_state.current_audio = audio_path
-
-                # Play audio immediately after generation
-                audio_player = get_audio_player_html(audio_path)
-                if audio_player:
-                    st.markdown(audio_player, unsafe_allow_html=True)
-
-        except Exception as e:
-            logger.error(f"Error generating audio: {str(e)}")
-
-        # Update word count
-        st.session_state.story_state["word_count"] = len(st.session_state.story_state["current_text"].split())
-
-        # Increment turn counter
-        st.session_state.story_state["story_turns"] += 1
-
-        # Save automatically
-        try:
-            save_story(st.session_state.story_state)
-        except Exception as e:
-            logger.error(f"Error saving story: {str(e)}")
-
-        # Check if we should end the story based on turns
-        if st.session_state.story_state["story_turns"] >= 10:
-            st.session_state.story_state["stage"] = "ending"
-
-        # Clear choices for next turn
-        if "current_choices" in st.session_state:
-            del st.session_state.current_choices
-
-        st.experimental_rerun()
-
-        # Handle errors in story continuation
+        # Play audio immediately after generation
+        audio_player = get_audio_player_html(audio_path)
+        if audio_player:
+            st.markdown(audio_player, unsafe_allow_html=True)
 except Exception as e:
-    st.error(f"Something went wrong with the story generation. Please try again.")
-    logger.error(f"Error in story continuation: {str(e)}")
-
-# Navigation options
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    if st.button("Save Story", key="save_story_button"):
-        try:
-            filename = save_story(st.session_state.story_state)
-            st.success(f"Story saved successfully!")
-        except Exception as e:
-            st.error(f"Error saving story: {str(e)}")
-
-with col2:
-    if st.button("End Story", key="end_story_button"):
-        st.session_state.story_state["stage"] = "ending"
-        st.experimental_rerun()
-
-with col3:
-    if st.button("New Story", key="new_story_button"):
-        if st.session_state.story_state["story_turns"] > 0:
-            # Add logic for handling new story creation
-            pass
+    logger.error(f"Error generating audio: {str(e)}")
+                    
+                    # Update word count
+                    st.session_state.story_state["word_count"] = len(st.session_state.story_state["current_text"].split())
+                    
+                    # Increment turn counter
+                    st.session_state.story_state["story_turns"] += 1
+                    
+                    # Save automatically
+                    try:
+                        save_story(st.session_state.story_state)
+                    except Exception as e:
+                        logger.error(f"Error saving story: {str(e)}")
+                    
+                    # Check if we should end story based on turns
+                    if st.session_state.story_state["story_turns"] >= 10:
+                        st.session_state.story_state["stage"] = "ending"
+                    
+                    # Clear choices for next turn
+                    if "current_choices" in st.session_state:
+                        del st.session_state.current_choices
+                    
+                    st.experimental_rerun()
+                except Exception as e:
+                    st.error(f"Something went wrong with the story generation. Please try again.")
+                    logger.error(f"Error in story continuation: {str(e)}")
+    
+    # Navigation options
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("Save Story", key="save_story_button"):
+            try:
+                filename = save_story(st.session_state.story_state)
+                st.success(f"Story saved successfully!")
+            except Exception as e:
+                st.error(f"Error saving story: {str(e)}")
+    
+    with col2:
+        if st.button("End Story", key="end_story_button"):
+            st.session_state.story_state["stage"] = "ending"
+            st.experimental_rerun()
+    
+    with col3:
+        if st.button("New Story", key="new_story_button"):
+            if st.session_state.story_state["story_turns"] > 0:
                 # Save current story before starting new
                 try:
                     save_story(st.session_state.story_state)
@@ -1034,8 +1024,6 @@ with col3:
                 del st.session_state.current_audio
             
             st.experimental_rerun()
-
-
 
 # Story ending screen
 def show_ending():
