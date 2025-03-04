@@ -938,7 +938,7 @@ def show_story():
                     # Update story text with user's choice and next part
                     st.session_state.story_state["current_text"] += f"\n\n<div class='choice-marker'>You chose: {chosen_action}</div>\n\n{next_part}"
                     
-    # Generate audio for the next part
+# Generate audio for the next part
 try:
     audio_path = text_to_speech(next_part)
     if audio_path:
@@ -948,6 +948,7 @@ try:
         audio_player = get_audio_player_html(audio_path)
         if audio_player:
             st.markdown(audio_player, unsafe_allow_html=True)
+
 except Exception as e:
     logger.error(f"Error generating audio: {str(e)}")
 
