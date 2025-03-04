@@ -977,7 +977,7 @@ for i, choice in enumerate(st.session_state.current_choices):
 
         st.experimental_rerun()
 
-# Handle errors in story continuation
+        # Handle errors in story continuation
 except Exception as e:
     st.error(f"Something went wrong with the story generation. Please try again.")
     logger.error(f"Error in story continuation: {str(e)}")
@@ -1034,6 +1034,8 @@ with col3:
                 del st.session_state.current_audio
             
             st.experimental_rerun()
+
+
 
 # Story ending screen
 def show_ending():
