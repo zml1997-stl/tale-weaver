@@ -924,7 +924,7 @@ def show_story():
             st.session_state.story_state["choices_made"].append(chosen_action)
             st.session_state.story_state["path_taken"].append({"type": "choice", "text": chosen_action})
             
-            # Continue story based on choice
+   # Continue story based on choice
             with st.spinner("The story unfolds..."):
                 try:
                     next_part = continue_story(
@@ -938,15 +938,15 @@ def show_story():
                     # Update story text with user's choice and next part
                     st.session_state.story_state["current_text"] += f"\n\n<div class='choice-marker'>You chose: {chosen_action}</div>\n\n{next_part}"
                     
-                    # Generate audio for the next part
-try:
-    audio_path = text_to_speech(next_part)
-    if audio_path:
-        st.session_state.current_audio = audio_path
+    # Generate audio for the next part
+      try:
+          audio_path = text_to_speech(next_part)
+          if audio_path:
+             st.session_state.current_audio = audio_path
 
         # Play audio immediately after generation
         audio_player = get_audio_player_html(audio_path)
-        if audio_player:
+          if audio_player:
             st.markdown(audio_player, unsafe_allow_html=True)
 except Exception as e:
     logger.error(f"Error generating audio: {str(e)}")
