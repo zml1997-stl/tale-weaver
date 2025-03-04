@@ -409,7 +409,7 @@ def generate_story_starters(genre=None, character_name=None, character_trait=Non
     """Generate story starters based on genre and character information"""
     prompt = """
     Generate 3 unique and engaging story starters for an interactive fiction game. 
-    Each starter should be 6-8 sentences long and end with an intriguing situation 
+    Each starter should be 3-4 sentences long and end with an intriguing situation 
     that sets up a choice, but DO NOT include the choices in the starter.
     """
     
@@ -460,7 +460,7 @@ def generate_choices(story_so_far, genre, character_name, character_trait=None, 
     
     prompt += """
     Each choice should:
-    1. Be 4-6 sentences long
+    1. Be 1-2 sentences long
     2. Offer a clear and specific action
     3. Lead to different possible story directions
     4. Make sense given the current story situation
