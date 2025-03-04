@@ -10,6 +10,7 @@ import re
 import base64
 from gtts import gTTS
 import logging
+from pydub import AudioSegment
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -276,8 +277,14 @@ if "story_state" not in st.session_state:
     }
 
 # Helper functions for text-to-speech
+def change_speed(sound, speed=1.15):
+    """Adjusts the speed of an audio file."""
+    return sound._spawn(sound.raw_data, overrides={
+        "frame_rate": int(sound.frame_rate * speed)
+    }).set_frame_rate(sound.frame_rate)
+
 def text_to_speech(text, filename=None):
-    """Generates audio from text and returns the file path"""
+    """Generates audio from text, adjusts speed, and returns the file path"""
     if not text:
         return None
     
@@ -293,8 +300,17 @@ def text_to_speech(text, filename=None):
         
         # Generate the audio file
         tts = gTTS(text=clean_text, lang='en', slow=False)
-        tts.save(file_path)
-        
+        temp_file = "temp_audio.mp3"  # Temporary file for processing
+        tts.save(temp_file)
+
+        # Load the generated audio and change the speed
+        audio = AudioSegment.from_file(temp_file)
+        faster_audio = change_speed(audio, speed=1.15)
+        faster_audio.export(file_path, format="mp3")
+
+        # Remove temp file
+        os.remove(temp_file)
+
         return file_path
     except Exception as e:
         logger.error(f"Error generating audio: {str(e)}")
@@ -307,10 +323,10 @@ def get_audio_player_html(audio_path):
             logger.error(f"Audio file not found: {audio_path}")
             return ""
             
-        audio_file = open(audio_path, 'rb')
-        audio_bytes = audio_file.read()
+        with open(audio_path, 'rb') as audio_file:
+            audio_bytes = audio_file.read()
+        
         audio_base64 = base64.b64encode(audio_bytes).decode()
-        audio_file.close()
         
         # Delete the file after reading to save space
         os.remove(audio_path)
