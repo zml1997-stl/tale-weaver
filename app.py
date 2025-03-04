@@ -939,12 +939,17 @@ def show_story():
                     st.session_state.story_state["current_text"] += f"\n\n<div class='choice-marker'>You chose: {chosen_action}</div>\n\n{next_part}"
                     
                     # Generate audio for the next part
-                    try:
-                        audio_path = text_to_speech(next_part)
-                        if audio_path:
-                            st.session_state.current_audio = audio_path
-                    except Exception as e:
-                        logger.error(f"Error generating audio: {str(e)}")
+try:
+    audio_path = text_to_speech(next_part)
+    if audio_path:
+        st.session_state.current_audio = audio_path
+
+        # Play audio immediately after generation
+        audio_player = get_audio_player_html(audio_path)
+        if audio_player:
+            st.markdown(audio_player, unsafe_allow_html=True)
+except Exception as e:
+    logger.error(f"Error generating audio: {str(e)}")
                     
                     # Update word count
                     st.session_state.story_state["word_count"] = len(st.session_state.story_state["current_text"].split())
