@@ -9,82 +9,121 @@ from datetime import datetime
 import re
 import base64
 from gtts import gTTS
-import logging
-from pydub import AudioSegment
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
 
 # Configure the Gemini API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if not GEMINI_API_KEY:
-    st.error("GEMINI_API_KEY not found in environment variables. Please add it to your .env file.")
-    st.stop()
-
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Set page configuration
 st.set_page_config(
-    page_title="Tale Weaver | Interactive Story Generator",
+    page_title="Tale Weaver - Interactive Story Generator",
     page_icon="📚",
-    layout="wide",
+    layout="centered",
     initial_sidebar_state="expanded"
 )
 
 # Ensure required folders exist
-os.makedirs("saved_stories", exist_ok=True)
-os.makedirs("audio_files", exist_ok=True)
+if not os.path.exists("saved_stories"):
+    os.makedirs("saved_stories")
 
-# Define CSS
+# Audio folder for TTS files
+if not os.path.exists("audio_files"):
+    os.makedirs("audio_files")
+
+# Initialize or load session state
+if "story_state" not in st.session_state:
+    st.session_state.story_state = {
+        "story_id": str(uuid.uuid4()),
+        "current_text": "",
+        "choices_made": [],
+        "path_taken": [],
+        "genre": "",
+        "character_name": "",
+        "stage": "welcome",  # welcome, setup, story, ending
+        "story_turns": 0,    # Track story progression
+        "word_count": 0      # Track total word count
+    }
+
+# TTS function - generates audio and returns HTML for audio player
+def text_to_speech(text, filename=None):
+    if not text:
+        return None
+    
+    # Clean text for TTS (remove HTML tags and special markers)
+    clean_text = re.sub(r'<[^>]*>', '', text)
+    
+    # Generate a unique filename if not provided
+    if filename is None:
+        filename = f"audio_{uuid.uuid4()}.mp3"
+    
+    file_path = os.path.join("audio_files", filename)
+    
+    # Generate the audio file
+    tts = gTTS(text=clean_text, lang='en', slow=False)
+    tts.save(file_path)
+    
+    # Return the audio file path
+    return file_path
+
+# Function to create an audio player HTML
+def get_audio_player_html(audio_path):
+    audio_file = open(audio_path, 'rb')
+    audio_bytes = audio_file.read()
+    audio_base64 = base64.b64encode(audio_bytes).decode()
+    audio_file.close()
+    
+    # Delete the file after reading to save space
+    os.remove(audio_path)
+    
+    html = f'''
+    <audio autoplay controls style="width: 100%;">
+        <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+        Your browser does not support the audio element.
+    </audio>
+    '''
+    return html
+
+# Improved styling with better contrast and readability
 def load_css():
     st.markdown("""
     <style>
-    /* Main theme colors */
-    :root {
-        --primary: #4CAF50;
-        --primary-dark: #388E3C;
-        --secondary: #2196F3;
-        --secondary-dark: #1976D2;
-        --text-dark: #1e1e1e;
-        --text-light: #ffffff;
-        --background-light: #f0f2f6;
-        --background-white: #ffffff;
-        --accent: #673ab7;
-    }
-    
     /* Background with better readability */
     .stApp {
-        background-color: var(--background-light);
-        color: var(--text-dark);
+        background-color: #f0f2f6;
+        color: #1e1e1e;
     }
-    
+
     /* Story text container with improved contrast */
     .story-text {
-        background-color: var(--background-white);
+        background-color: #ffffff;
         border-radius: 10px;
         padding: 20px;
         margin: 15px 0;
         line-height: 1.8;
-        color: var(--text-dark);
+        color: #1e1e1e;
         font-size: 1.1rem;
-        border-left: 4px solid var(--primary);
+        border-left: 4px solid #4CAF50;
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
-    
+
     /* Dialog text styling */
     .dialog {
         color: #0d47a1;
         font-style: italic;
     }
-    
+
+    /* Description text styling */
+    .description {
+        color: #1e1e1e;
+    }
+
     /* Button styling with better visibility */
     .stButton > button {
-        background-color: var(--primary) !important;
-        color: var(--text-light) !important;
+        background-color: #4CAF50 !important;
+        color: #FFFFFF !important;
         padding: 12px 24px !important;
         font-size: 1.05rem !important;
         border: none !important;
@@ -98,53 +137,62 @@ def load_css():
         transition: all 0.3s ease !important;
         box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
     }
-    
+
     /* Button hover effect */
     .stButton > button:hover {
-        background-color: var(--primary-dark) !important;
+        background-color: #388E3C !important;
         box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
         transform: translateY(-2px) !important;
     }
-    
+
     /* Secondary button styling */
-    .secondary-button > button {
-        background-color: var(--secondary) !important;
+    .secondary-button {
+        background-color: #2196F3 !important;
+        color: #ffffff !important;
+        padding: 10px 20px !important;
+        font-size: 16px !important;
+        border: none !important;
+        border-radius: 8px !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
     }
-    
-    .secondary-button > button:hover {
-        background-color: var(--secondary-dark) !important;
+
+    .secondary-button:hover {
+        background-color: #1976D2 !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
     }
-    
+
     /* Genre badges */
     .genre-badge {
         display: inline-block;
-        background-color: var(--accent);
+        background-color: #673ab7;
         color: white;
         padding: 5px 10px;
         border-radius: 15px;
         font-size: 0.85rem;
         margin: 5px 5px 5px 0;
     }
-    
+
     /* Headers with improved visibility */
     .welcome-header {
-        font-size: 3.5rem;
+        font-size: 4rem;
         text-align: center;
         margin-bottom: 30px;
-        color: var(--primary-dark);
+        color: #2E7D32;
         font-family: 'Georgia', serif;
     }
-    
+
     .section-header {
         font-size: 2rem;
         margin-top: 20px;
         margin-bottom: 15px;
-        color: var(--primary-dark);
+        color: #2E7D32;
         font-family: 'Georgia', serif;
-        border-bottom: 2px solid var(--primary);
+        border-bottom: 2px solid #4CAF50;
         padding-bottom: 10px;
     }
-    
+
     /* Progress indicators */
     .progress-indicator {
         background-color: #e8f5e9;
@@ -152,52 +200,47 @@ def load_css():
         padding: 10px;
         margin: 10px 0;
         font-size: 0.9rem;
-        color: var(--text-dark);
-        border-left: 3px solid var(--primary);
+        color: #1e1e1e;
+        border-left: 3px solid #4CAF50;
     }
-    
+
     /* Choice marker */
     .choice-marker {
-        color: var(--primary-dark);
+        color: #2E7D32;
         font-weight: bold;
         font-style: italic;
         margin: 10px 0;
     }
-    
-    /* Story option styling */
-    .story-option {
-        background-color: var(--background-white);
-        border-radius: 10px;
-        border-left: 4px solid var(--accent);
-        padding: 15px;
-        margin: 10px 0;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        color: var(--text-dark);
+
+    /* Form inputs with better contrast */
+    .stTextInput input, .stSelectbox div [data-baseweb="select"] div {
+        background-color: #ffffff;
+        color: #1e1e1e;
+        border: 1px solid #4CAF50;
+        border-radius: 5px;
     }
-    
-    .story-option:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+
+    /* Placeholder text */
+    .stTextInput input::placeholder {
+        color: #9e9e9e;
     }
-    
-    /* Character card */
-    .character-card {
-        background-color: var(--background-white);
-        border-radius: 10px;
-        border-left: 4px solid var(--primary);
-        padding: 15px;
-        margin: 15px 0;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+
+    /* Custom input field */
+    .custom-input {
+        background-color: #ffffff;
+        border: 1px solid #4CAF50;
+        border-radius: 5px;
+        padding: 10px;
+        color: #1e1e1e;
+        width: 100%;
     }
-    
-    /* Save notification */
+
+    /* Story save notification */
     .save-notification {
         position: fixed;
         bottom: 20px;
         right: 20px;
-        background-color: var(--primary);
+        background-color: #4CAF50;
         color: white;
         padding: 15px;
         border-radius: 5px;
@@ -205,23 +248,51 @@ def load_css():
         z-index: 1000;
         animation: fadeIn 0.5s, fadeOut 0.5s 2.5s forwards;
     }
-    
+
     @keyframes fadeIn {
         from {opacity: 0;}
         to {opacity: 1;}
     }
-    
+
     @keyframes fadeOut {
         from {opacity: 1;}
         to {opacity: 0;}
     }
+
+    /* Character card */
+    .character-card {
+        background-color: #ffffff;
+        border-radius: 10px;
+        border-left: 4px solid #4CAF50;
+        padding: 15px;
+        margin: 15px 0;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    /* Story options styling */
+    .story-option {
+        background-color: #ffffff;
+        border-radius: 10px;
+        border-left: 4px solid #673ab7;
+        padding: 15px;
+        margin: 10px 0;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        color: #1e1e1e;
+    }
+
+    .story-option:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
     
-    /* Form inputs with better contrast */
-    .stTextInput input, .stSelectbox div [data-baseweb="select"] div {
-        background-color: var(--background-white);
-        color: var(--text-dark);
-        border: 1px solid var(--primary);
-        border-radius: 5px;
+    /* Audio player styling */
+    audio {
+        width: 100%;
+        margin: 10px 0;
+        border-radius: 30px;
+        background-color: #e8f5e9;
     }
     
     /* Sidebar styling */
@@ -231,120 +302,16 @@ def load_css():
     
     /* Text in sidebar */
     .css-1d391kg p, .css-1d391kg h1, .css-1d391kg h2, .css-1d391kg h3 {
-        color: var(--text-dark);
-    }
-    
-    /* Tabs styling */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        height: auto;
-        padding: 10px 16px;
-        white-space: normal;
-        background-color: #f0f2f6;
-        border-radius: 4px 4px 0 0;
-        gap: 4px;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background-color: var(--primary);
-        color: white;
-    }
-    
-    /* Loading spinner */
-    .stSpinner {
-        text-align: center;
-        margin: 20px 0;
+        color: #1e1e1e;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# Initialize or load session state
-if "story_state" not in st.session_state:
-    st.session_state.story_state = {
-        "story_id": str(uuid.uuid4()),
-        "current_text": "",
-        "choices_made": [],
-        "path_taken": [],
-        "genre": "",
-        "character_name": "",
-        "character_trait": "",
-        "stage": "welcome",  # welcome, setup, story, ending
-        "story_turns": 0,    # Track story progression
-        "word_count": 0      # Track total word count
-    }
+# Load CSS
+load_css()
 
-# Helper functions for text-to-speech
-def change_speed(sound, speed=1.15):
-    """Adjusts the speed of an audio file."""
-    return sound._spawn(sound.raw_data, overrides={
-        "frame_rate": int(sound.frame_rate * speed)
-    }).set_frame_rate(sound.frame_rate)
-
-def text_to_speech(text, filename=None):
-    """Generates audio from text, adjusts speed, and returns the file path"""
-    if not text:
-        return None
-    
-    try:
-        # Clean text for TTS (remove HTML tags and special markers)
-        clean_text = re.sub(r'<[^>]*>', '', text)
-        
-        # Generate a unique filename if not provided
-        if filename is None:
-            filename = f"audio_{uuid.uuid4()}.mp3"
-        
-        file_path = os.path.join("audio_files", filename)
-        
-        # Generate the audio file
-        tts = gTTS(text=clean_text, lang='en', slow=False)
-        temp_file = "temp_audio.mp3"  # Temporary file for processing
-        tts.save(temp_file)
-
-        # Load the generated audio and change the speed
-        audio = AudioSegment.from_file(temp_file)
-        faster_audio = change_speed(audio, speed=1.15)
-        faster_audio.export(file_path, format="mp3")
-
-        # Remove temp file
-        os.remove(temp_file)
-
-        return file_path
-    except Exception as e:
-        logger.error(f"Error generating audio: {str(e)}")
-        return None
-
-def get_audio_player_html(audio_path):
-    """Creates an HTML audio player from an audio file path"""
-    try:
-        if not os.path.exists(audio_path):
-            logger.error(f"Audio file not found: {audio_path}")
-            return ""
-            
-        with open(audio_path, 'rb') as audio_file:
-            audio_bytes = audio_file.read()
-        
-        audio_base64 = base64.b64encode(audio_bytes).decode()
-        
-        # Delete the file after reading to save space
-        os.remove(audio_path)
-        
-        html = f'''
-        <audio autoplay controls style="width: 100%;">
-            <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
-            Your browser does not support the audio element.
-        </audio>
-        '''
-        return html
-    except Exception as e:
-        logger.error(f"Error creating audio player: {str(e)}")
-        return ""
-
-# Main functionality for generating content and managing story flow
+# Helper function to generate content with Gemini
 def generate_with_gemini(prompt, temperature=0.7, max_retries=3, retry_delay=2):
-    """Generate content using Gemini API with error handling and retries"""
     attempt = 0
     while attempt < max_retries:
         try:
@@ -353,45 +320,38 @@ def generate_with_gemini(prompt, temperature=0.7, max_retries=3, retry_delay=2):
             return response.text
         except Exception as e:
             attempt += 1
-            logger.warning(f"API call attempt {attempt} failed: {str(e)}")
             if attempt < max_retries:
                 time.sleep(retry_delay)
             else:
-                logger.error(f"Failed to generate content after {max_retries} attempts: {str(e)}")
+                st.error(f"Error generating content after {max_retries} attempts: {str(e)}")
                 return "Once upon a time, there was an error in the storytelling machine..."
 
+# Parse JSON safely
 def safe_json_parse(text):
-    """Parse JSON safely with multiple fallback methods"""
-    logger.debug("Attempting to parse JSON response")
-    
     # First try direct parsing
     try:
         return json.loads(text)
-    except json.JSONDecodeError:
-        logger.debug("Direct JSON parsing failed, trying alternative methods")
+    except:
+        # Try to find JSON array in the text using regex
+        json_match = re.search(r'\[\s*".*"\s*\]', text, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group(0))
+            except:
+                pass
         
-    # Try to find JSON array in the text using regex
-    json_match = re.search(r'\[\s*".*"\s*\]', text, re.DOTALL)
-    if json_match:
-        try:
-            return json.loads(json_match.group(0))
-        except json.JSONDecodeError:
-            logger.debug("JSON array extraction failed")
-    
-    # Try to extract items with quotes
-    items = re.findall(r'"([^"]*)"', text)
-    if items and len(items) > 0:
-        logger.debug(f"Extracted {len(items)} quoted items")
-        return items
-    
-    # Fallback: split by newlines, numbers or bullets
-    logger.debug("Using fallback text splitting method")
-    fallback_items = re.split(r'\n\s*(?:\d+\.|\*)\s*', text)
-    fallback_items = [s.strip() for s in fallback_items if s.strip()]
-    return fallback_items
+        # Try to extract items with quotes
+        items = re.findall(r'"([^"]*)"', text)
+        if items and len(items) > 0:
+            return items
+        
+        # Fallback: split by newlines, numbers or bullets
+        fallback_items = re.split(r'\n\s*(?:\d+\.|\*)\s*', text)
+        fallback_items = [s.strip() for s in fallback_items if s.strip()]
+        return fallback_items
 
+# Function to clean story text by removing embedded AI choices
 def clean_story_text(text):
-    """Clean story text by removing embedded AI choices and formatting artifacts"""
     # Remove patterns like "Option A: ...", "1. ...", "Choice: ..." etc.
     patterns = [
         r'(?:Option|Choice)\s+[A-Za-z0-9]+\s*:\s*.*?(?=(?:Option|Choice)|$)',
@@ -421,26 +381,23 @@ def clean_story_text(text):
     
     return cleaned_text.strip()
 
-def generate_story_starters(genre=None, character_name=None, character_trait=None):
-    """Generate story starters based on genre and character information"""
+# Generate story starters based on genre
+def generate_story_starters(genre=None, character_name=None):
     prompt = """
-    Generate 3 unique and engaging story starters for an interactive fiction game. 
-    Each starter should be 3-4 sentences long and end with an intriguing situation 
-    that sets up a choice, but DO NOT include the choices in the starter.
+    Generate 3 unique and engaging story starters for an interactive fiction game.
+    Each starter should be 2-3 sentences long and end with an intriguing situation that sets up a choice,
+    but DO NOT include the choices in the starter.
     """
     
     if genre:
         prompt += f" The genre is {genre}."
-    
+        
     if character_name:
         prompt += f" The main character's name is {character_name}."
         
-    if character_trait:
-        prompt += f" The character's defining trait is being {character_trait}."
-    
     prompt += """
-    Make each starter distinct and compelling. Format the response as a JSON array 
-    with each starter as a string element. Example format: ["Starter 1...", "Starter 2...", "Starter 3..."]
+    Make each starter distinct and compelling. Format the response as a JSON array with each starter as a string element.
+    Example format: ["Starter 1...", "Starter 2...", "Starter 3..."]
     
     DO NOT include any choices or options in the starters themselves.
     """
@@ -449,17 +406,17 @@ def generate_story_starters(genre=None, character_name=None, character_trait=Non
         response = generate_with_gemini(prompt)
         starters = safe_json_parse(response)
         return starters[:3]  # Ensure we only return 3 starters
-    
+        
     except Exception as e:
-        logger.error(f"Error generating story starters: {str(e)}")
+        st.error(f"Error generating story starters: {str(e)}")
         return [
             f"You find yourself standing at the edge of a mysterious forest with a map that seems to lead to a hidden treasure.",
             f"The spaceship's alarm blares as you wake up from cryosleep, the rest of the crew is missing.",
             f"The old mansion you just inherited contains a locked room that nobody has entered for over a century."
         ]
 
-def generate_choices(story_so_far, genre, character_name, character_trait=None, num_choices=3):
-    """Generate choices for the user based on the current story"""
+# Generate choices for the user
+def generate_choices(story_so_far, genre, character_name, num_choices=3):
     # First clean the story text to remove any embedded choices
     cleaned_story = clean_story_text(story_so_far)
     
@@ -469,12 +426,7 @@ def generate_choices(story_so_far, genre, character_name, character_trait=None, 
     {cleaned_story}
     
     Generate exactly {num_choices} interesting and distinct choices for what the character {character_name if character_name else 'the protagonist'} could do next.
-    """
     
-    if character_trait:
-        prompt += f" Remember that the character is {character_trait}, which may influence their options."
-    
-    prompt += """
     Each choice should:
     1. Be 1-2 sentences long
     2. Offer a clear and specific action
@@ -482,7 +434,8 @@ def generate_choices(story_so_far, genre, character_name, character_trait=None, 
     4. Make sense given the current story situation
     5. NOT reference any options or choices that might be in the story text
     
-    Format the response as a JSON array with each choice as a string element. Example format: ["Choice 1...", "Choice 2...", "Choice 3..."]
+    Format the response as a JSON array with each choice as a string element.
+    Example format: ["Choice 1...", "Choice 2...", "Choice 3..."]
     
     IMPORTANT: DO NOT number the choices or add prefixes like "Option A" - just provide the plain choice text.
     """
@@ -498,15 +451,15 @@ def generate_choices(story_so_far, genre, character_name, character_trait=None, 
         return choices[:num_choices]  # Return only the requested number of choices
         
     except Exception as e:
-        logger.error(f"Error generating choices: {str(e)}")
+        st.error(f"Error generating choices: {str(e)}")
         return [
             "Continue forward cautiously.",
             "Turn back and seek another path.",
             "Call out to see if anyone responds."
         ]
 
-def continue_story(story_so_far, chosen_action, genre, character_name, character_trait=None):
-    """Continue the story based on user choice"""
+# Continue the story based on user choice
+def continue_story(story_so_far, chosen_action, genre, character_name):
     # Clean the story text first
     cleaned_story = clean_story_text(story_so_far)
     
@@ -516,14 +469,8 @@ def continue_story(story_so_far, chosen_action, genre, character_name, character
     Story so far: {cleaned_story}
     
     Chosen action: {chosen_action}
-    """
     
-    if character_trait:
-        prompt += f"\nRemember that the character is {character_trait}, which influences their approach and reactions."
-    
-    prompt += """
-    Write the next part of the story (about 400-600 words) that follows from this choice. 
-    End at a natural stopping point that creates anticipation for what might happen next.
+    Write the next part of the story (about 150-200 words) that follows from this choice. End at a natural stopping point that creates anticipation for what might happen next.
     
     IMPORTANT:
     - DO NOT include any numbered choices, options, or decision points in your response
@@ -534,10 +481,11 @@ def continue_story(story_so_far, chosen_action, genre, character_name, character
     """
     
     response = generate_with_gemini(prompt, temperature=0.8)
+    
     return clean_story_text(response)
 
-def generate_story_ending(story_so_far, genre, character_name, character_trait=None):
-    """Generate a satisfying conclusion to the story"""
+# Generate a story ending
+def generate_story_ending(story_so_far, genre, character_name):
     # Clean the story text first
     cleaned_story = clean_story_text(story_so_far)
     
@@ -545,16 +493,11 @@ def generate_story_ending(story_so_far, genre, character_name, character_trait=N
     Write a satisfying conclusion to this {genre} story featuring {character_name if character_name else 'the protagonist'}:
     
     {cleaned_story}
-    """
     
-    if character_trait:
-        prompt += f"\nRemember that the character is {character_trait}, which should be reflected in how they resolve the situation."
-    
-    prompt += """
-    Create a meaningful and emotionally resonant ending (about 400-600 words) that:
+    Create a meaningful and emotionally resonant ending (about 200-300 words) that:
     1. Resolves the main tension or conflict
     2. Provides closure for the character
-    3. Reflects the tone and themes of the genre
+    3. Reflects the tone and themes of the {genre} genre
     4. Leaves the reader with a final image or thought
     
     Make the ending feel earned and connected to the character's journey.
@@ -562,16 +505,16 @@ def generate_story_ending(story_so_far, genre, character_name, character_trait=N
     
     return generate_with_gemini(prompt, temperature=0.8)
 
+# Generate story recap
 def generate_recap(story_state):
-    """Generate a brief recap of the story so far"""
-    choices_made = story_state.get("choices_made", [])
-    genre = story_state.get("genre", "adventure")
-    character_name = story_state.get("character_name", "the protagonist")
+    choices_made = story_state["choices_made"]
+    genre = story_state["genre"]
+    character_name = story_state["character_name"] if story_state["character_name"] else "the protagonist"
     
     # If no choices made yet, return empty string
     if not choices_made:
         return ""
-    
+        
     prompt = f"""
     Create a brief recap (2-3 sentences) of this {genre} story so far featuring {character_name}.
     Focus on the key decisions and turning points.
@@ -580,31 +523,25 @@ def generate_recap(story_state):
     """
     
     recap = generate_with_gemini(prompt, temperature=0.7)
+    
     return recap
 
-# Story management functions
+# Save story to file
 def save_story(story_state):
-    """Save story to file with error handling"""
-    try:
-        story_id = story_state["story_id"]
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"saved_stories/{story_id}_{timestamp}.json"
-        
-        with open(filename, "w") as f:
-            json.dump(story_state, f, indent=2)
-        
-        logger.info(f"Story saved successfully: {filename}")
-        return filename
-    except Exception as e:
-        logger.error(f"Error saving story: {str(e)}")
-        return None
-
-def get_saved_stories():
-    """Load saved stories list with error handling"""
-    if not os.path.exists("saved_stories"):
-        logger.warning("Saved stories directory does not exist")
-        return []
+    story_id = story_state["story_id"]
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"saved_stories/{story_id}_{timestamp}.json"
     
+    with open(filename, "w") as f:
+        json.dump(story_state, f, indent=2)
+        
+    return filename
+
+# Load saved stories list
+def get_saved_stories():
+    if not os.path.exists("saved_stories"):
+        return []
+        
     stories = []
     for filename in os.listdir("saved_stories"):
         if filename.endswith(".json"):
@@ -612,34 +549,26 @@ def get_saved_stories():
             try:
                 with open(file_path, "r") as f:
                     story_data = json.load(f)
-                
+                    
                 # Extract key information
-                date_str = filename.split("_")[1].split(".")[0]
-                try:
-                    date_obj = datetime.strptime(date_str, "%Y%m%d%H%M%S")
-                    formatted_date = date_obj.strftime("%b %d, %Y")
-                except ValueError:
-                    formatted_date = "Unknown date"
-                
                 story_info = {
                     "filename": filename,
-                    "date": formatted_date,
+                    "date": datetime.strptime(filename.split("_")[1].split(".")[0], "%Y%m%d%H%M%S").strftime("%b %d, %Y"),
                     "genre": story_data.get("genre", "Unknown"),
                     "character": story_data.get("character_name", "Unknown"),
                     "choices": len(story_data.get("choices_made", [])),
-                    "story_id": story_data.get("story_id", ""),
-                    "word_count": story_data.get("word_count", 0)
+                    "story_id": story_data.get("story_id", "")
                 }
                 stories.append(story_info)
-            except Exception as e:
-                logger.error(f"Error loading story {filename}: {str(e)}")
-    
+            except:
+                pass
+                
     # Sort by date (newest first)
-    stories.sort(key=lambda x: x["filename"], reverse=True)
+    stories.sort(key=lambda x: x["date"], reverse=True)
     return stories
 
+# Calculate story statistics
 def calculate_story_stats(story_state):
-    """Calculate story statistics"""
     # Count words in current story
     word_count = len(story_state["current_text"].split())
     
@@ -647,20 +576,19 @@ def calculate_story_stats(story_state):
     reading_time = round(word_count / 225)
     if reading_time < 1:
         reading_time = "< 1"
-    
+        
     # Count choices made
-    choices_made = len(story_state.get("choices_made", []))
+    choices_made = len(story_state["choices_made"])
     
     return {
         "word_count": word_count,
         "reading_time": reading_time,
         "choices_made": choices_made,
-        "story_turns": story_state.get("story_turns", 0)
+        "story_turns": story_state["story_turns"]
     }
 
-# UI screens and components
+# Welcome screen
 def show_welcome():
-    """Display the welcome screen"""
     st.markdown("<h1 class='welcome-header'>Tale Weaver</h1>", unsafe_allow_html=True)
     st.markdown("<h2 style='text-align: center;'>Interactive Story Generator</h2>", unsafe_allow_html=True)
     
@@ -683,12 +611,12 @@ def show_welcome():
         if st.button("Begin Your Journey", key="begin_journey", help="Start a new adventure"):
             st.session_state.story_state["stage"] = "setup"
             st.experimental_rerun()
-    
+            
     with col2:
         if st.button("Load Saved Story", key="load_saved", help="Continue a previous adventure"):
             st.session_state.view_saved = True
             st.experimental_rerun()
-    
+            
     # Show saved stories if requested
     if "view_saved" in st.session_state and st.session_state.view_saved:
         saved_stories = get_saved_stories()
@@ -705,31 +633,27 @@ def show_welcome():
                     st.markdown(f"""
                     <div class="story-option">
                         <strong>{story['character']}'s {story['genre']} Adventure</strong><br>
-                        <small>Saved on {story['date']} • {story['choices']} choices made • {story['word_count']} words</small>
+                        <small>Saved on {story['date']} • {story['choices']} choices made</small>
                     </div>
                     """, unsafe_allow_html=True)
-                
+                    
                 with col2:
                     if st.button("Continue", key=f"load_{story['story_id']}"):
-                        try:
-                            file_path = os.path.join("saved_stories", story["filename"])
-                            with open(file_path, "r") as f:
-                                st.session_state.story_state = json.load(f)
-                            st.session_state.story_state["stage"] = "story"
+                        file_path = os.path.join("saved_stories", story["filename"])
+                        with open(file_path, "r") as f:
+                            st.session_state.story_state = json.load(f)
+                        st.session_state.story_state["stage"] = "story"
+                        
+                        # Clear any temporary states
+                        if "view_saved" in st.session_state:
+                            del st.session_state.view_saved
+                        if "current_choices" in st.session_state:
+                            del st.session_state.current_choices
                             
-                            # Clear any temporary states
-                            if "view_saved" in st.session_state:
-                                del st.session_state.view_saved
-                            if "current_choices" in st.session_state:
-                                del st.session_state.current_choices
-                                
-                            st.experimental_rerun()
-                        except Exception as e:
-                            st.error(f"Error loading story: {str(e)}")
+                        st.experimental_rerun()
 
 # Setup screen
 def show_setup():
-    """Display the story setup screen for genre and character creation"""
     st.markdown("<h2 class='section-header'>Create Your Adventure</h2>", unsafe_allow_html=True)
     
     # Genre selection with color-coded badges
@@ -746,7 +670,7 @@ def show_setup():
         "Comedy": "Humor, wit, and light-hearted situations"
     }
     
-    # Create genre selection grid with improved UI
+    # Create genre selection grid
     cols = st.columns(2)
     for i, (genre, description) in enumerate(genre_options.items()):
         with cols[i % 2]:
@@ -759,7 +683,7 @@ def show_setup():
             
             if st.button(f"Select {genre}", key=f"genre_{genre}"):
                 st.session_state.selected_genre = genre
-    
+                
     # Show character creation after genre selection
     if "selected_genre" in st.session_state:
         st.markdown("<h3 class='section-header'>Create Your Character</h3>", unsafe_allow_html=True)
@@ -767,96 +691,81 @@ def show_setup():
         col1, col2 = st.columns([1, 1])
         
         with col1:
-            character_name = st.text_input(
-                "Name your protagonist:", 
-                placeholder="Enter a name...", 
-                help="Leave blank for a nameless protagonist"
-            )
-        
+            character_name = st.text_input("Name your protagonist:", placeholder="Enter a name...", help="Leave blank for a nameless protagonist")
+            
         with col2:
-            character_trait = st.selectbox(
-                "Character's defining trait:", 
-                ["Brave", "Clever", "Cautious", "Curious", "Determined", 
-                 "Witty", "Resourceful", "Compassionate", "Mysterious", "Practical"]
-            )
-        
+            character_trait = st.selectbox("Character's defining trait:", ["Brave", "Clever", "Cautious", "Curious", "Determined", "Witty", "Resourceful", "Compassionate", "Mysterious", "Practical"])
+            
         # Generate story starters
         if st.button("Generate Story Beginnings", key="gen_starters"):
             with st.spinner("Crafting your adventure beginnings..."):
-                starters = generate_story_starters(
-                    st.session_state.selected_genre, 
-                    character_name,
-                    character_trait
-                )
+                starters = generate_story_starters(st.session_state.selected_genre, character_name)
                 st.session_state.story_starters = starters
                 st.session_state.character_trait = character_trait
-        
+                
         # Show starters if available
-        if "story_starters" in st.session_state:
-            st.markdown("<h3 class='section-header'>Choose your starting point:</h3>", unsafe_allow_html=True)
-            
-            # Create a container for the story starter selection
-            starter_container = st.container()
-            
-            # Check if a starter has been selected
-            if "selected_starter" not in st.session_state:
-                # If no starter selected yet, show all options
-                with starter_container:
-                    for i, starter in enumerate(st.session_state.story_starters):
-                        st.markdown(f"""
-                        <div class="story-option">
-                            {starter}
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        if st.button(f"Begin This Story", key=f"starter_{i}"):
-                            # Save the selected starter
-                            st.session_state.selected_starter = i
-                            
-                            # Save selections and move to story stage
-                            st.session_state.story_state["genre"] = st.session_state.selected_genre
-                            st.session_state.story_state["character_name"] = character_name
-                            st.session_state.story_state["character_trait"] = st.session_state.character_trait
-                            st.session_state.story_state["current_text"] = starter
-                            st.session_state.story_state["stage"] = "story"
-                            st.session_state.story_state["path_taken"].append({"type": "beginning", "text": starter})
-                            st.session_state.story_state["word_count"] = len(starter.split())
-                            st.session_state.story_state["story_turns"] = 0
-                            
-                            # Generate audio for the starter
-                            try:
-                                audio_path = text_to_speech(starter)
-                                if audio_path:
-                                    st.session_state.current_audio = audio_path
-                            except Exception as e:
-                                logger.error(f"Error generating audio: {str(e)}")
-                            
-                            # Clear temporary states
-                            if "current_choices" in st.session_state:
-                                del st.session_state.current_choices
-                            
-                            st.experimental_rerun()
-            else:
-                # If a starter has been selected, only show that one with a message
-                with starter_container:
-                    selected_idx = st.session_state.selected_starter
-                    st.markdown(f"""
-                    <div class="story-option">
-                        {st.session_state.story_starters[selected_idx]}
-                    </div>
-                    """, unsafe_allow_html=True)
-                    st.info("Story beginning selected! Your adventure is starting...")
-                
-                # Add a small delay before transitioning to story mode
-                time.sleep(0.5)
-                
-                # Move to story stage
-                st.session_state.story_state["stage"] = "story"
-                st.experimental_rerun()
+if "story_starters" in st.session_state and "selected_genre" in st.session_state:
+    st.markdown("<h3 class='section-header'>Choose your starting point:</h3>", unsafe_allow_html=True)
+   
+    # Create a container for the story starter selection
+    starter_container = st.container()
+   
+    # Check if a starter has been selected
+    if "selected_starter" not in st.session_state:
+        # If no starter selected yet, show all options
+        with starter_container:
+            for i, starter in enumerate(st.session_state.story_starters):
+                st.markdown(f"""
+                <div class="story-option">
+                    {starter}
+                </div>
+                """, unsafe_allow_html=True)
+               
+                if st.button(f"Begin This Story", key=f"starter_{i}"):
+                    # Save the selected starter
+                    st.session_state.selected_starter = i
+                   
+                    # Save selections and move to story stage
+                    st.session_state.story_state["genre"] = st.session_state.selected_genre
+                    st.session_state.story_state["character_name"] = character_name if 'character_name' in locals() else ""
+                    st.session_state.story_state["character_trait"] = st.session_state.character_trait
+                    st.session_state.story_state["current_text"] = starter
+                    st.session_state.story_state["stage"] = "story"
+                    st.session_state.story_state["path_taken"].append({"type": "beginning", "text": starter})
+                    st.session_state.story_state["word_count"] = len(starter.split())
+                    st.session_state.story_state["story_turns"] = 0
+                   
+                    # Generate audio for the starter
+                    audio_path = text_to_speech(starter)
+                    if audio_path:
+                        st.session_state.current_audio = audio_path
+                   
+                    # Clear temporary states
+                    if "current_choices" in st.session_state:
+                        del st.session_state.current_choices
+                       
+                    st.experimental_rerun()
+    else:
+        # If a starter has been selected, only show that one with a message
+        with starter_container:
+            selected_idx = st.session_state.selected_starter
+            st.markdown(f"""
+            <div class="story-option">
+                {st.session_state.story_starters[selected_idx]}
+            </div>
+            """, unsafe_allow_html=True)
+            st.info("Story beginning selected! Your adventure is starting...")
+           
+            # Add a small delay before transitioning to story mode
+            import time
+            time.sleep(0.5)
+           
+            # Move to story stage
+            st.session_state.story_state["stage"] = "story"
+            st.experimental_rerun()
 
 # Story screen
 def show_story():
-    """Display the main story screen with choices"""
     # Story header with genre badge
     st.markdown(f"""
     <h2 class='section-header'>
@@ -886,32 +795,20 @@ def show_story():
     
     # Play audio if available
     if "current_audio" in st.session_state:
-        try:
-            audio_player = get_audio_player_html(st.session_state.current_audio)
-            st.markdown(audio_player, unsafe_allow_html=True)
-            # Remove the reference after playing
-            del st.session_state.current_audio
-        except Exception as e:
-            logger.error(f"Error playing audio: {str(e)}")
+        audio_player = get_audio_player_html(st.session_state.current_audio)
+        st.markdown(audio_player, unsafe_allow_html=True)
+        # Remove the reference after playing
+        del st.session_state.current_audio
     
     # Generate choices if not already present
     if "current_choices" not in st.session_state:
         with st.spinner("Determining possible paths..."):
-            try:
-                choices = generate_choices(
-                    st.session_state.story_state["current_text"],
-                    st.session_state.story_state["genre"],
-                    st.session_state.story_state["character_name"],
-                    st.session_state.story_state.get("character_trait", "")
-                )
-                st.session_state.current_choices = choices
-            except Exception as e:
-                logger.error(f"Error generating choices: {str(e)}")
-                st.session_state.current_choices = [
-                    "Continue forward cautiously.",
-                    "Turn back and seek another path.",
-                    "Call out to see if anyone responds."
-                ]
+            choices = generate_choices(
+                st.session_state.story_state["current_text"],
+                st.session_state.story_state["genre"],
+                st.session_state.story_state["character_name"]
+            )
+            st.session_state.current_choices = choices
     
     # Display choices
     st.markdown("<h3>What will you do next?</h3>", unsafe_allow_html=True)
@@ -924,82 +821,59 @@ def show_story():
             st.session_state.story_state["choices_made"].append(chosen_action)
             st.session_state.story_state["path_taken"].append({"type": "choice", "text": chosen_action})
             
-   # Continue story based on choice
+            # Continue story based on choice
             with st.spinner("The story unfolds..."):
-                try:
-                    next_part = continue_story(
-                        st.session_state.story_state["current_text"],
-                        chosen_action,
-                        st.session_state.story_state["genre"],
-                        st.session_state.story_state["character_name"],
-                        st.session_state.story_state.get("character_trait", "")
-                    )
+                next_part = continue_story(
+                    st.session_state.story_state["current_text"],
+                    chosen_action,
+                    st.session_state.story_state["genre"],
+                    st.session_state.story_state["character_name"])
+                
+                # Update story text with user's choice and next part
+                st.session_state.story_state["current_text"] += f"\n\n<div class='choice-marker'>You chose: {chosen_action}</div>\n\n{next_part}"
+                
+                # Generate audio for the next part
+                audio_path = text_to_speech(next_part)
+                if audio_path:
+                    st.session_state.current_audio = audio_path
+                
+                # Update word count
+                st.session_state.story_state["word_count"] = len(st.session_state.story_state["current_text"].split())
+                
+                # Increment turn counter
+                st.session_state.story_state["story_turns"] += 1
+                
+                # Save automatically
+                save_story(st.session_state.story_state)
+                
+                # Check if we should end story based on turns
+                if st.session_state.story_state["story_turns"] >= 10:
+                    st.session_state.story_state["stage"] = "ending"
+                
+                # Clear choices for next turn
+                if "current_choices" in st.session_state:
+                    del st.session_state.current_choices
                     
-                    # Update story text with user's choice and next part
-                    st.session_state.story_state["current_text"] += f"\n\n<div class='choice-marker'>You chose: {chosen_action}</div>\n\n{next_part}"
-                    
-    # Generate audio for the next part
-      try:
-          audio_path = text_to_speech(next_part)
-          if audio_path:
-             st.session_state.current_audio = audio_path
-
-        # Play audio immediately after generation
-        audio_player = get_audio_player_html(audio_path)
-          if audio_player:
-            st.markdown(audio_player, unsafe_allow_html=True)
-except Exception as e:
-    logger.error(f"Error generating audio: {str(e)}")
-                    
-                    # Update word count
-                    st.session_state.story_state["word_count"] = len(st.session_state.story_state["current_text"].split())
-                    
-                    # Increment turn counter
-                    st.session_state.story_state["story_turns"] += 1
-                    
-                    # Save automatically
-                    try:
-                        save_story(st.session_state.story_state)
-                    except Exception as e:
-                        logger.error(f"Error saving story: {str(e)}")
-                    
-                    # Check if we should end story based on turns
-                    if st.session_state.story_state["story_turns"] >= 10:
-                        st.session_state.story_state["stage"] = "ending"
-                    
-                    # Clear choices for next turn
-                    if "current_choices" in st.session_state:
-                        del st.session_state.current_choices
-                    
-                    st.experimental_rerun()
-                except Exception as e:
-                    st.error(f"Something went wrong with the story generation. Please try again.")
-                    logger.error(f"Error in story continuation: {str(e)}")
+                st.experimental_rerun()
     
     # Navigation options
     col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("Save Story", key="save_story_button"):
-            try:
-                filename = save_story(st.session_state.story_state)
-                st.success(f"Story saved successfully!")
-            except Exception as e:
-                st.error(f"Error saving story: {str(e)}")
-    
+            filename = save_story(st.session_state.story_state)
+            st.success(f"Story saved successfully!")
+            
     with col2:
         if st.button("End Story", key="end_story_button"):
             st.session_state.story_state["stage"] = "ending"
             st.experimental_rerun()
-    
+            
     with col3:
         if st.button("New Story", key="new_story_button"):
             if st.session_state.story_state["story_turns"] > 0:
                 # Save current story before starting new
-                try:
-                    save_story(st.session_state.story_state)
-                except Exception as e:
-                    logger.error(f"Error saving story: {str(e)}")
-            
+                save_story(st.session_state.story_state)
+                
             # Reset story state
             st.session_state.story_state = {
                 "story_id": str(uuid.uuid4()),
@@ -1008,7 +882,6 @@ except Exception as e:
                 "path_taken": [],
                 "genre": "",
                 "character_name": "",
-                "character_trait": "",
                 "stage": "welcome",
                 "story_turns": 0,
                 "word_count": 0
@@ -1023,52 +896,40 @@ except Exception as e:
                 del st.session_state.story_starters
             if "current_audio" in st.session_state:
                 del st.session_state.current_audio
-            
+                
             st.experimental_rerun()
 
 # Story ending screen
 def show_ending():
-    """Display the story conclusion screen"""
     st.markdown("<h2 class='section-header'>Story Conclusion</h2>", unsafe_allow_html=True)
     
     if "ending_text" not in st.session_state:
         with st.spinner("Crafting your story's conclusion..."):
-            try:
-                ending = generate_story_ending(
-                    st.session_state.story_state["current_text"],
-                    st.session_state.story_state["genre"],
-                    st.session_state.story_state["character_name"],
-                    st.session_state.story_state.get("character_trait", "")
-                )
-                st.session_state.ending_text = ending
-                
-                # Generate audio for the ending
-                try:
-                    audio_path = text_to_speech(ending)
-                    if audio_path:
-                        st.session_state.ending_audio = audio_path
-                except Exception as e:
-                    logger.error(f"Error generating ending audio: {str(e)}")
-                
-                # Update story with ending
-                st.session_state.story_state["current_text"] += f"\n\n<div class='section-header'>The Conclusion</div>\n\n{st.session_state.ending_text}"
-                st.session_state.story_state["path_taken"].append({"type": "ending", "text": st.session_state.ending_text})
-                
-                # Update word count
-                st.session_state.story_state["word_count"] = len(st.session_state.story_state["current_text"].split())
-                
-                # Save story with ending
-                try:
-                    save_story(st.session_state.story_state)
-                except Exception as e:
-                    logger.error(f"Error saving story with ending: {str(e)}")
-            except Exception as e:
-                st.error("There was an issue generating your story's conclusion. Please try again.")
-                logger.error(f"Error generating ending: {str(e)}")
-                st.session_state.ending_text = "And so, the adventure came to an end, leaving many questions unanswered but many memories to cherish."
+            ending = generate_story_ending(
+                st.session_state.story_state["current_text"],
+                st.session_state.story_state["genre"],
+                st.session_state.story_state["character_name"]
+            )
+            st.session_state.ending_text = ending
+            
+            # Generate audio for the ending
+            audio_path = text_to_speech(ending)
+            if audio_path:
+                st.session_state.ending_audio = audio_path
+    
+    # Update story with ending
+    st.session_state.story_state["current_text"] += f"\n\n<div class='section-header'>The Conclusion</div>\n\n{st.session_state.ending_text}"
+    st.session_state.story_state["path_taken"].append({"type": "ending", "text": st.session_state.ending_text})
+    
+    # Update word count
+    st.session_state.story_state["word_count"] = len(st.session_state.story_state["current_text"].split())
+    
+    # Save story with ending
+    save_story(st.session_state.story_state)
     
     # Display story stats
     stats = calculate_story_stats(st.session_state.story_state)
+    
     st.markdown(f"""
     <div class='progress-indicator'>
         <strong>Final Statistics:</strong><br>
@@ -1081,22 +942,15 @@ def show_ending():
     
     # Play ending audio if available
     if "ending_audio" in st.session_state:
-        try:
-            audio_player = get_audio_player_html(st.session_state.ending_audio)
-            st.markdown(audio_player, unsafe_allow_html=True)
-            # Remove the reference after playing
-            del st.session_state.ending_audio
-        except Exception as e:
-            logger.error(f"Error playing ending audio: {str(e)}")
+        audio_player = get_audio_player_html(st.session_state.ending_audio)
+        st.markdown(audio_player, unsafe_allow_html=True)
+        # Remove the reference after playing
+        del st.session_state.ending_audio
     
     # Generate and display summary/recap
     with st.expander("Your Adventure Summary", expanded=True):
-        try:
-            recap = generate_recap(st.session_state.story_state)
-            st.markdown(f"<div class='story-text'>{recap}</div>", unsafe_allow_html=True)
-        except Exception as e:
-            logger.error(f"Error generating recap: {str(e)}")
-            st.markdown("<div class='story-text'>Your adventure was filled with choices and consequences, leading to this conclusion.</div>", unsafe_allow_html=True)
+        recap = generate_recap(st.session_state.story_state)
+        st.markdown(f"<div class='story-text'>{recap}</div>", unsafe_allow_html=True)
     
     # Display full story with ending
     with st.expander("Read Your Complete Story", expanded=True):
@@ -1107,6 +961,7 @@ def show_ending():
     
     # Options for next steps
     col1, col2 = st.columns(2)
+    
     with col1:
         if st.button("Start New Adventure", key="new_adventure"):
             # Reset story state
@@ -1117,7 +972,6 @@ def show_ending():
                 "path_taken": [],
                 "genre": "",
                 "character_name": "",
-                "character_trait": "",
                 "stage": "welcome",
                 "story_turns": 0,
                 "word_count": 0
@@ -1132,7 +986,7 @@ def show_ending():
                 del st.session_state.story_starters
             if "ending_text" in st.session_state:
                 del st.session_state.ending_text
-            
+                
             st.experimental_rerun()
     
     with col2:
@@ -1145,7 +999,6 @@ def show_ending():
                 "path_taken": [],
                 "genre": "",
                 "character_name": "",
-                "character_trait": "",
                 "stage": "welcome",
                 "story_turns": 0,
                 "word_count": 0
@@ -1163,13 +1016,14 @@ def show_ending():
                 del st.session_state.story_starters
             if "ending_text" in st.session_state:
                 del st.session_state.ending_text
-            
+                
             st.experimental_rerun()
     
     # Export options
     st.markdown("<h3 class='section-header'>Export Your Story</h3>", unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
+    
     with col1:
         if st.button("Copy to Clipboard", key="copy_clipboard"):
             clean_text = re.sub(r'<[^>]*>', '', st.session_state.story_state["current_text"])
@@ -1189,7 +1043,6 @@ def show_ending():
 
 # Sidebar content
 def show_sidebar():
-    """Display the sidebar with additional information and controls"""
     st.sidebar.markdown("## Tale Weaver")
     st.sidebar.markdown("An interactive storytelling experience powered by AI")
     
@@ -1199,14 +1052,11 @@ def show_sidebar():
         st.sidebar.markdown("### Your Adventure")
         
         if st.session_state.story_state["genre"]:
-            st.sidebar.markdown(f"**Genre:** {st.session_state.story_state['genre']}")
-        
-        if st.session_state.story_state["character_name"]:
-            st.sidebar.markdown(f"**Protagonist:** {st.session_state.story_state['character_name']}")
+            st.sidebar.markdown(f"*Genre:* {st.session_state.story_state['genre']}")
             
-        if st.session_state.story_state.get("character_trait", ""):
-            st.sidebar.markdown(f"**Character Trait:** {st.session_state.story_state['character_trait']}")
-        
+        if st.session_state.story_state["character_name"]:
+            st.sidebar.markdown(f"*Protagonist:* {st.session_state.story_state['character_name']}")
+            
         # Show choices made
         if st.session_state.story_state["choices_made"]:
             with st.sidebar.expander("Your Journey So Far", expanded=False):
@@ -1224,15 +1074,6 @@ def show_sidebar():
         - Character traits subtly influence story events
         """)
     
-    # Audio settings
-    with st.sidebar.expander("🔊 Audio Settings", expanded=False):
-        if "audio_enabled" not in st.session_state:
-            st.session_state.audio_enabled = True
-        
-        audio_enabled = st.checkbox("Enable Text-to-Speech", value=st.session_state.audio_enabled)
-        if audio_enabled != st.session_state.audio_enabled:
-            st.session_state.audio_enabled = audio_enabled
-    
     # Credits
     st.sidebar.markdown("---")
     st.sidebar.markdown("### Credits")
@@ -1241,23 +1082,21 @@ def show_sidebar():
 
 # Main app flow
 def main():
-    """Main application entry point"""
-    try:
-        # Show sidebar
-        show_sidebar()
-        
-        # Determine which screen to show based on story stage
-        if st.session_state.story_state["stage"] == "welcome":
-            show_welcome()
-        elif st.session_state.story_state["stage"] == "setup":
-            show_setup()
-        elif st.session_state.story_state["stage"] == "story":
-            show_story()
-        elif st.session_state.story_state["stage"] == "ending":
-            show_ending()
-    except Exception as e:
-        st.error("An unexpected error occurred. Please refresh the page and try again.")
-        logger.error(f"Unexpected error in main app flow: {str(e)}")
+    # Load CSS
+    load_css()
+    
+    # Show sidebar
+    show_sidebar()
+    
+    # Determine which screen to show based on story stage
+    if st.session_state.story_state["stage"] == "welcome":
+        show_welcome()
+    elif st.session_state.story_state["stage"] == "setup":
+        show_setup()
+    elif st.session_state.story_state["stage"] == "story":
+        show_story()
+    elif st.session_state.story_state["stage"] == "ending":
+        show_ending()
 
 if __name__ == "__main__":
     main()
